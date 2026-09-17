@@ -460,7 +460,7 @@ function renderTpls(){
   if(type!=='email'){
     scenes.forEach(s=>{
       const hay=((s.title||'')+' '+(s.te||'')).toLowerCase();
-      if(!q||hay.indexOf(q)>=0) items.push({kind:'scene',stage:'',title:s.title||s.key||'话术场景',en:s.te||'',zh:''});
+      if(!q||hay.indexOf(q)>=0) items.push({kind:'scene',stage:'',title:s.title||s.key||'话术场景',te:s.te||'',fields:s.fields||[]});
     });
   }
   tplItems=items;
@@ -471,17 +471,29 @@ function renderTpls(){
     const d=document.createElement('div');d.className='tpl';
     const head=document.createElement('div');head.className='tpl-h';
     head.innerHTML='<span class="pill">'+esc(it.kind==='email'?('邮件 · '+it.stage):'话术场景')+'</span> <b>'+esc(it.title)+'</b>';
-    const copyBtn=document.createElement('button');copyBtn.className='ghost mini';
-    copyBtn.textContent='复制'+(it.en?'英文':'内容');
-    copyBtn.onclick=()=>copyText(it.en||it.zh||'');
-    head.appendChild(copyBtn);
-    if(it.en){const sv=document.createElement('button');sv.className='ghost mini';
+    if(it.kind==='email'){
+      const copyBtn=document.createElement('button');copyBtn.className='ghost mini';
+      copyBtn.textContent='复制英文';
+      copyBtn.onclick=()=>copyText(it.en||'');
+      head.appendChild(copyBtn);
+      const sv=document.createElement('button');sv.className='ghost mini';
       sv.textContent='存入邮件记录';
-      sv.onclick=()=>saveEmail(it.kind==='email'?'邮件模板':'话术场景', it.title, it.en||it.zh||'');
-      head.appendChild(sv);}
+      sv.onclick=()=>saveEmail('邮件模板', it.title, it.en||'');
+      head.appendChild(sv);
+    }
     d.appendChild(head);
-    if(it.en){const body=document.createElement('div');body.className='tpl-b';body.textContent=it.en;d.appendChild(body);}
-    if(it.zh){const z=document.createElement('div');z.className='tpl-zh';z.textContent=(it.kind==='email'?'说明：':'')+it.zh;d.appendChild(z);}
+    if(it.kind==='email'){
+      if(it.en){const body=document.createElement('div');body.className='tpl-b';body.textContent=it.en;d.appendChild(body);}
+      if(it.zh){const z=document.createElement('div');z.className='tpl-zh';z.textContent='说明：'+it.zh;d.appendChild(z);}
+    }else{
+      const sub=document.createElement('div');sub.className='tpl-zh';
+      let s='英文：'+(it.te||'');
+      if(it.fields&&it.fields.length) s+='　|　需填：'+it.fields.map(f=>(f.l||f.k)).join('、');
+      sub.textContent=s;d.appendChild(sub);
+      const hint=document.createElement('div');hint.className='mtag';
+      hint.textContent='在「话术/邮件场景生成」选用本场景并按上方字段填写，即可一键生成英文话术。';
+      d.appendChild(hint);
+    }
     b.appendChild(d);
   });
 }
