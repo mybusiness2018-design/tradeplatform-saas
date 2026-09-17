@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>外贸工作台 · 商业版</title>
+<style>
+  :root{--bg:#f5f7fa;--card:#fff;--pri:#2563eb;--pri2:#1d4ed8;--ok:#16a34a;--mut:#6b7280;--bd:#e5e7eb;--red:#dc2626}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:#111;line-height:1.5}
+  .wrap{max-width:920px;margin:0 auto;padding:16px}
+  .card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:18px;margin:12px 0;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+  h1{font-size:20px;margin:0 0 4px}
+  h2{font-size:16px;margin:0 0 10px}
+  .sub{color:var(--mut);font-size:13px}
+  label{display:block;font-size:13px;color:var(--mut);margin:10px 0 4px}
+  input,select,textarea{width:100%;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;font-size:16px;background:#fff}
+  textarea{resize:vertical;min-height:60px}
+  button{cursor:pointer;border:0;border-radius:10px;padding:11px 16px;font-size:15px;font-weight:600;background:var(--pri);color:#fff}
+  button.ghost{background:#eef2ff;color:var(--pri2)}
+  button.danger{background:#fef2f2;color:var(--red)}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .row>*{flex:1;min-width:120px}
+  .btnrow{display:flex;gap:10px;margin-top:12px}
+  .hide{display:none!important}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#111;color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;transition:.3s;pointer-events:none;z-index:50;max-width:90vw}
+  .toast.show{opacity:.95}
+  .err{color:var(--red);font-size:13px;margin-top:8px;min-height:18px}
+  .topbar{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .pill{font-size:12px;background:#eef2ff;color:var(--pri2);padding:4px 10px;border-radius:999px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--bd);vertical-align:top}
+  th{color:var(--mut);font-weight:600;font-size:12px}
+  .st{font-size:12px;padding:2px 8px;border-radius:999px}
+  .st-潜在{background:#fef3c7;color:#92400e}.st-跟进中{background:#dbeafe;color:#1e40af}.st-成交{background:#dcfce7;color:#166534}
+  .mini{padding:5px 9px;font-size:13px;border-radius:8px}
+  .mtag{font-size:12px;color:var(--mut)}
+  .lock{text-align:center;padding:40px 16px}
+  .lock .big{font-size:40px;margin-bottom:8px}
+  @media(max-width:600px){.row>*{min-width:100%}th.hidecol,td.hidecol{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 锁定页: 未登录 -->
+  <div id="auth" class="card lock">
+    <div class="big">🔒</div>
+    <h1>外贸工作台 · 商业版</h1>
+    <div class="sub">请登录或注册账号后使用（每人数据独立隔离）</div>
+    <div class="card" style="text-align:left;max-width:360px;margin:16px auto">
+      <div class="row">
+        <div><label>邮箱</label><input id="email" type="email" placeholder="you@company.com"></div>
+      </div>
+      <div class="row">
+        <div><label>密码（至少 6 位）</label><input id="pwd" type="password" placeholder="••••••"></div>
+      </div>
+      <div class="err" id="autherr"></div>
+      <div class="btnrow">
+        <button onclick="login()">登录</button>
+        <button class="ghost" onclick="signup()">注册</button>
+      </div>
+      <div class="sub" style="margin-top:10px">首次使用点「注册」即开账号。</div>
+    </div>
+  </div>
+
+  <!-- 应用区: 登录后 -->
+  <div id="app" class="hide">
+    <div class="card topbar">
+      <div><h1>外贸工作台 · 商业版</h1><div class="sub">多租户 SaaS · 你的数据仅你自己可见</div></div>
+      <div class="row" style="flex:0"><span class="pill" id="who"></span><button class="ghost mini" onclick="logout()">退出</button></div>
+    </div>
+
+    <!-- 客户模块(示例, 证明多租户隔离) -->
+    <div class="card">
+      <h2>我的客户（CRM 示例模块）</h2>
+      <div class="row">
+        <div><label>姓名</label><input id="c_name" placeholder="客户姓名"></div>
+        <div><label>公司</label><input id="c_company" placeholder="公司名"></div>
+      </div>
+      <div class="row">
+        <div><label>国家/地区</label><input id="c_country" placeholder="如 UAE / USA"></div>
+        <div><label>需求产品</label><input id="c_product" placeholder="如 Muslim gift"></div>
+      </div>
+      <div class="row">
+        <div><label>状态</label>
+          <select id="c_status"><option>潜在</option><option>跟进中</option><option>成交</option></select>
+        </div>
+        <div><label>备注</label><input id="c_note" placeholder="关键信息"></div>
+      </div>
+      <div class="btnrow"><button onclick="addCust()">添加客户</button><button class="ghost" onclick="clearForm()">清空</button></div>
+      <div class="err" id="c_err"></div>
+      <table style="margin-top:12px">
+        <thead><tr><th>姓名</th><th class="hidecol">公司</th><th class="hidecol">国家</th><th>产品</th><th>状态</th><th></th></tr></thead>
+        <tbody id="c_body"></tbody>
+      </table>
+    </div>
+
+    <div class="card sub">
+      这是商业版地基（账号门 + 每用户数据隔离已跑通）。后续将：① 把你的现有模块逐批移植进来；
+      ② 将邮件/话术等核心算法移到服务端，买家看不到源码（真防护）；③ 接入付款后激活开关。
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SB_URL='https://mveygafleuduixvjgjlb.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im12ZXlnYWZsZXVkdWl4dmpnamxiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNTAzMjUsImV4cCI6MjEwNDYyNjMyNX0.YjZ8Gl3ocfvHs6R92Zd0xABLIDgr_5E6sbjU7S5WOrY';
+let session=null;          // {access_token,refresh_token,user:{id,email}}
+let state={customers:[]};  // 每用户的工作台状态(存 user_state.data)
+
+const $=id=>document.getElementById(id);
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2200);}
+
+async function api(path,opts){
+  opts=opts||{};
+  const h={'apikey':SB_KEY,'Content-Type':'application/json',...opts.headers};
+  if(session&&session.access_token)h['Authorization']='Bearer '+session.access_token;
+  const r=await fetch(SB_URL+path,{...opts,headers:h});
+  const txt=await r.text();
+  let j=null;try{j=JSON.parse(txt);}catch(e){}
+  return {status:r.status,data:j,raw:txt};
+}
+
+function saveSession(){try{localStorage.setItem('saas_session',JSON.stringify(session));}catch(e){}}
+function loadSession(){try{return JSON.parse(localStorage.getItem('saas_session')||'null');}catch(e){return null;}}
+function clearSession(){localStorage.removeItem('saas_session');}
+
+async function signup(){
+  $('autherr').textContent='';
+  const email=$('email').value.trim(),pwd=$('pwd').value;
+  if(!email||pwd.length<6){$('autherr').textContent='请填邮箱，密码至少 6 位';return;}
+  const r=await api('/auth/v1/signup',{method:'POST',body:JSON.stringify({email,password:pwd})});
+  if(r.status===200&&r.data&&r.data.user){
+    session={access_token:r.data.access_token,refresh_token:r.data.refresh_token,user:r.data.user};
+    saveSession();onAuthed();
+  }else if(r.data&&r.data.msg){$('autherr').textContent=r.data.msg;}
+  else{$('autherr').textContent='注册失败('+r.status+')，若提示需验证邮箱，请先到 Supabase 后台关闭"确认邮箱"。';}
+}
+async function login(){
+  $('autherr').textContent='';
+  const email=$('email').value.trim(),pwd=$('pwd').value;
+  if(!email||!pwd){$('autherr').textContent='请填邮箱和密码';return;}
+  const r=await api('/auth/v1/token?grant_type=password',{method:'POST',body:JSON.stringify({email,password:pwd})});
+  if(r.status===200&&r.data&&r.data.access_token){
+    session={access_token:r.data.access_token,refresh_token:r.data.refresh_token,user:r.data.user};
+    saveSession();onAuthed();
+  }else if(r.data&&r.data.error_description){$('autherr').textContent=r.data.error_description;}
+  else{$('autherr').textContent='登录失败('+r.status+')';}
+}
+function logout(){clearSession();session=null;$('app').classList.add('hide');$('auth').classList.remove('hide');}
+
+async function onAuthed(){
+  // 校验会话
+  const me=await api('/auth/v1/user');
+  if(me.status!==200||!me.data||!me.data.id){logout();return;}
+  session.user=me.data;
+  $('auth').classList.add('hide');$('app').classList.remove('hide');
+  $('who').textContent=session.user.email;
+  await loadState();renderCust();
+}
+
+async function loadState(){
+  const r=await api('/rest/v1/user_state?uid=eq.'+session.user.id+'&select=data');
+  if(r.status===200&&Array.isArray(r.data)&&r.data[0]&&r.data[0].data){
+    try{state=Object.assign({customers:[]},r.data[0].data);}catch(e){}
+  }
+}
+async function saveState(){
+  const body={uid:session.user.id,data:state,updated_at:new Date().toISOString()};
+  const r=await api('/rest/v1/user_state?on_conflict=uid',{method:'POST',
+    headers:{'Prefer':'resolution=merge-duplicates, return=minimal'},body:JSON.stringify(body)});
+  if(r.status>=200&&r.status<300){toast('已保存');}
+  else{$('c_err').textContent='保存失败('+r.status+')';}
+}
+
+function addCust(){
+  $('c_err').textContent='';
+  const name=$('c_name').value.trim();
+  if(!name){$('c_err').textContent='请填客户姓名';return;}
+  state.customers.push({
+    id:Date.now()+''+Math.floor(Math.random()*1000),
+    name,company:$('c_company').value.trim(),country:$('c_country').value.trim(),
+    product:$('c_product').value.trim(),status:$('c_status').value,note:$('c_note').value.trim()
+  });
+  clearForm();renderCust();saveState();
+}
+function clearForm(){['c_name','c_company','c_country','c_product','c_note'].forEach(k=>$(k).value='');$('c_status').value='潜在';}
+function delCust(id){state.customers=state.customers.filter(c=>c.id!==id);renderCust();saveState();}
+function renderCust(){
+  const b=$('c_body');b.innerHTML='';
+  state.customers.forEach(c=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML='<td>'+esc(c.name)+'</td><td class="hidecol">'+esc(c.company)+'</td><td class="hidecol">'+esc(c.country)+'</td><td>'+esc(c.product)+'</td><td><span class="st st-'+c.status+'">'+c.status+'</span></td><td><button class="danger mini" onclick="delCust(\''+c.id+'\')">删除</button></td>';
+    b.appendChild(tr);
+  });
+  if(!state.customers.length)b.innerHTML='<tr><td colspan="6" class="mtag">暂无客户，添加一条试试（数据只存在你自己的账号里）。</td></tr>';
+}
+function esc(s){return (s||'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
+
+// 启动: 恢复会话
+(function(){const s=loadSession();if(s&&s.access_token){session=s;onAuthed();}})();
+</script>
+</body>
+</html>
