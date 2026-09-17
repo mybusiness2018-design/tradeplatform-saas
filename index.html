@@ -96,9 +96,58 @@
       </table>
     </div>
 
+    <!-- AI 跟进序列生成器（核心算法在服务端, 前端只调接口） -->
+    <div class="card">
+      <h2>AI 跟进序列生成器</h2>
+      <div class="hint sub" style="margin-bottom:10px">输入客户与阶段，服务端按你行业的打法生成完整跟进节奏（开发→成交→复购）。算法在服务器运行，买家看不到源码。</div>
+      <div class="row">
+        <div><label>我的名字</label><input id="gc_me_name" placeholder="如 John Guo"></div>
+        <div><label>我的公司</label><input id="gc_me_company" placeholder="如 Demo Co"></div>
+        <div><label>从业年限</label><input id="gc_me_years" type="number" placeholder="如 8"></div>
+      </div>
+      <div class="row">
+        <div><label>客户名</label><input id="gc_name" placeholder="客户姓名"></div>
+        <div><label>需求产品</label><input id="gc_product" placeholder="如 prayer pillow"></div>
+      </div>
+      <div class="row">
+        <div><label>国家</label><input id="gc_country" placeholder="如 UAE"></div>
+        <div><label>市场区</label><input id="gc_market" placeholder="如 Middle East"></div>
+        <div><label>阶段</label>
+          <select id="gc_stage"><option>待开发</option><option>已联系</option><option>已回复</option><option>试样</option><option>报价</option><option>成交</option></select>
+        </div>
+      </div>
+      <div class="btnrow"><button onclick="genCadenceUI()">生成跟进序列</button><button class="ghost" onclick="copyText($('gc_out').textContent)">复制结果</button></div>
+      <div class="err" id="gc_err"></div>
+      <pre class="out" id="gc_out" style="white-space:pre-wrap;margin-top:10px;min-height:40px"></pre>
+    </div>
+
+    <!-- 话术/邮件场景生成器 -->
+    <div class="card">
+      <h2>话术 / 邮件场景生成</h2>
+      <div class="row">
+        <div><label>场景</label><select id="gc_scene"></select></div>
+      </div>
+      <div class="row">
+        <div><label>客户名</label><input id="gc_s_name" placeholder="客户姓名"></div>
+        <div><label>产品</label><input id="gc_s_product" placeholder="如 prayer pillow"></div>
+      </div>
+      <div class="row">
+        <div><label>国家/市场</label><input id="gc_s_country" placeholder="如 UAE"></div>
+        <div><label>你的优势(1句)</label><input id="gc_s_edge" placeholder="如 稳定斋月库存"></div>
+      </div>
+      <div class="row">
+        <div><label>我的公司</label><input id="gc_s_company" placeholder="如 Demo Co"></div>
+        <div><label>数量</label><input id="gc_s_qty" placeholder="如 1000"></div>
+      </div>
+      <div class="btnrow"><button onclick="genSceneUI()">生成</button><button class="ghost" onclick="copyText($('gc_s_en').textContent)">复制英文</button></div>
+      <div class="err" id="gc_s_err"></div>
+      <div class="out" id="gc_s_en" style="margin-top:8px;white-space:pre-wrap;min-height:30px"></div>
+      <div class="out zh" id="gc_s_zh" style="margin-top:6px;white-space:pre-wrap;min-height:24px"></div>
+    </div>
+
     <div class="card sub">
-      这是 TradePilot 地基（账号门 + 每用户数据隔离已跑通）。后续将：① 把你的现有模块逐批移植进来；
-      ② 将邮件/话术等核心算法移到服务端，买家看不到源码（真防护）；③ 接入付款后激活开关。
+      TradePilot 地基（账号门 + 每用户数据隔离）已跑通；邮件/话术核心算法已移到 Supabase 服务端（#93 完成，买家看不到源码）。
+      后续：① 把其余模块逐批移植；② 接入付款后激活开关。
     </div>
   </div>
 </div>
@@ -160,6 +209,7 @@ async function onAuthed(){
   $('auth').classList.add('hide');$('app').classList.remove('hide');
   $('who').textContent=session.user.email;
   await loadState();renderCust();
+  loadScenes();
 }
 
 async function loadState(){
@@ -199,6 +249,46 @@ function renderCust(){
   if(!state.customers.length)b.innerHTML='<tr><td colspan="6" class="mtag">暂无客户，添加一条试试（数据只存在你自己的账号里）。</td></tr>';
 }
 function esc(s){return (s||'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
+
+// ===== 服务端算法调用（核心逻辑不在前端, 只发请求收结果）=====
+async function edgeInvoke(action, payload){
+  if(!session||!session.access_token){throw new Error('请先登录');}
+  const r=await fetch(SB_URL+'/functions/v1/gen_scene',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+session.access_token},
+    body:JSON.stringify({action,payload})
+  });
+  let j=null; try{j=await r.json();}catch(e){}
+  if(r.status===401) throw new Error('未登录或无权限');
+  if(!j||!j.ok) throw new Error((j&&j.error)||('服务错误('+r.status+')'));
+  return j.result;
+}
+async function loadScenes(){
+  try{const list=await edgeInvoke('list_scenes',{});const sel=$('gc_scene');
+    sel.innerHTML=list.map(s=>'<option value="'+s.key+'">'+esc(s.title)+'</option>').join('');}
+  catch(e){console.warn('loadScenes failed',e);}
+}
+async function genCadenceUI(){
+  $('gc_err').textContent='';
+  try{
+    const me={name:$('gc_me_name').value.trim(),company:$('gc_me_company').value.trim(),years:parseInt($('gc_me_years').value||'0',10)};
+    const lead={name:$('gc_name').value.trim(),product:$('gc_product').value.trim(),country:$('gc_country').value.trim(),market:$('gc_market').value.trim(),stage:$('gc_stage').value};
+    if(!lead.name){$('gc_err').textContent='请填客户名';return;}
+    const out=await edgeInvoke('gen_cadence',{lead,me});
+    $('gc_out').textContent=out;toast('已生成');
+  }catch(e){$('gc_err').textContent=e.message;}
+}
+async function genSceneUI(){
+  $('gc_s_err').textContent='';
+  try{
+    const me={name:$('gc_me_name').value.trim(),company:$('gc_me_company').value.trim(),years:parseInt($('gc_me_years').value||'0',10)};
+    const v={client:$('gc_s_name').value.trim(),product:$('gc_s_product').value.trim(),country:$('gc_s_country').value.trim(),edge:$('gc_s_edge').value.trim(),company:$('gc_s_company').value.trim(),qty:$('gc_s_qty').value.trim()};
+    const scene=$('gc_scene').value;
+    const r=await edgeInvoke('gen_scene',{scene,v,me});
+    $('gc_s_en').textContent=r.en||'';$('gc_s_zh').textContent=r.zh||'';toast('已生成');
+  }catch(e){$('gc_s_err').textContent=e.message;}
+}
+function copyText(t){if(!t)return;navigator.clipboard&&navigator.clipboard.writeText(t);toast('已复制');}
 
 // 启动: 恢复会话
 (function(){const s=loadSession();if(s&&s.access_token){session=s;onAuthed();}})();
