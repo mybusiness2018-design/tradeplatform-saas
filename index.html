@@ -37,6 +37,12 @@
   .mtag{font-size:12px;color:var(--mut)}
   .lock{text-align:center;padding:40px 16px}
   .lock .big{font-size:40px;margin-bottom:8px}
+  .tpl{border:1px solid var(--bd);border-radius:10px;padding:10px 12px;margin:10px 0;background:#fafbff}
+  .tpl-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+  .tpl-h b{font-size:14px}
+  .tpl-b{white-space:pre-wrap;font-size:13px;color:#1f2937;max-height:260px;overflow:auto}
+  .tpl-zh{margin-top:6px;font-size:12px;color:var(--mut);white-space:pre-wrap}
+  .tpl-count{font-size:13px;color:var(--mut);margin:6px 0}
   @media(max-width:600px){.row>*{min-width:100%}th.hidecol,td.hidecol{display:none}}
 </style>
 </head>
@@ -195,12 +201,30 @@
       </table>
     </div>
 
+    <!-- 模板库模块（复制人版 76 邮件模板 + 19 话术场景） -->
+    <div class="card">
+      <h2>模板库（邮件 76 + 话术场景 19）</h2>
+      <div class="sub">从服务端拉取行业实战模板，可搜索、一键复制。模板与算法同在服务器，不随前端下发（IP 防护）。</div>
+      <div class="row">
+        <div><label>搜索</label><input id="tpl_search" placeholder="按标题 / 阶段 / 内容搜索…" oninput="renderTpls()"></div>
+        <div style="flex:0 0 160px"><label>类型</label>
+          <select id="tpl_type" onchange="renderTpls()">
+            <option value="">全部</option>
+            <option value="email">邮件模板</option>
+            <option value="scene">话术场景</option>
+          </select>
+        </div>
+      </div>
+      <div class="tpl-count" id="tpl_count"></div>
+      <div id="tpl_list"></div>
+    </div>
+
     </div><!-- /modules -->
 
     <div class="card sub">
       TradePilot 地基（账号门 + 每用户数据隔离）已跑通；核心算法已移到 Supabase 服务端（#93 完成，买家看不到源码）。
-      模块：客户 CRM、AI 跟进序列、话术/邮件场景、资料库、邮件记录，均按用户隔离存于 Supabase（#94 完成）。
-      未付款账号显示激活锁屏，付款后由卖家激活（#95 完成）。
+      模块：客户 CRM、AI 跟进序列、话术/邮件场景、资料库、邮件记录、模板库，均按用户隔离存于 Supabase（#94 完成）。
+      未付款账号显示激活锁屏，付款后由卖家激活（#95 完成）。模板库内容由服务端返回，复制即用。
     </div>
   </div>
 </div>
@@ -263,7 +287,7 @@ async function onAuthed(){
   $('who').textContent=session.user.email;
   await loadState();renderCust();renderDocs();renderEmails();
   await loadProfile();applyGate();
-  loadScenes();
+  if(session.active){ loadScenes(); loadTpls(); }
 }
 
 async function loadState(){
@@ -412,6 +436,56 @@ async function genSceneUI(){
     $('gc_s_en').textContent=r.en||'';$('gc_s_zh').textContent=r.zh||'';toast('已生成');
   }catch(e){$('gc_s_err').textContent=e.message;}
 }
+
+// ===== 模板库模块：从服务端拉取 76 邮件模板 + 19 话术场景 =====
+let tplItems=[];   // 当前渲染列表（供复制/存入引用）
+async function loadTpls(){
+  try{
+    const [tpls,scenes]=await Promise.all([edgeInvoke('list_tpls',{}),edgeInvoke('list_scenes',{})]);
+    window.__tpls=tpls||[]; window.__scenes=scenes||[];
+    renderTpls();
+  }catch(e){console.warn('loadTpls failed',e);}
+}
+function renderTpls(){
+  const q=($('tpl_search').value||'').trim().toLowerCase();
+  const type=$('tpl_type').value;
+  const tpls=window.__tpls||[], scenes=window.__scenes||[];
+  let items=[];
+  if(type!=='scene'){
+    tpls.forEach(t=>{
+      const hay=(t.stage+' '+(t.title||'')+' '+(t.en||'')+' '+(t.zh||'')).toLowerCase();
+      if(!q||hay.indexOf(q)>=0) items.push({kind:'email',stage:t.stage||'',title:t.title||('邮件模板'+(t.i+1)),en:t.en||'',zh:t.zh||''});
+    });
+  }
+  if(type!=='email'){
+    scenes.forEach(s=>{
+      const hay=((s.title||'')+' '+(s.te||'')).toLowerCase();
+      if(!q||hay.indexOf(q)>=0) items.push({kind:'scene',stage:'',title:s.title||s.key||'话术场景',en:s.te||'',zh:''});
+    });
+  }
+  tplItems=items;
+  const b=$('tpl_list');b.innerHTML='';
+  $('tpl_count').textContent='共 '+items.length+' 条'+(q?'（已筛选）':'');
+  if(!items.length){b.innerHTML='<div class="mtag" style="padding:10px">无匹配模板，换个关键词试试。</div>';return;}
+  items.forEach(it=>{
+    const d=document.createElement('div');d.className='tpl';
+    const head=document.createElement('div');head.className='tpl-h';
+    head.innerHTML='<span class="pill">'+esc(it.kind==='email'?('邮件 · '+it.stage):'话术场景')+'</span> <b>'+esc(it.title)+'</b>';
+    const copyBtn=document.createElement('button');copyBtn.className='ghost mini';
+    copyBtn.textContent='复制'+(it.en?'英文':'内容');
+    copyBtn.onclick=()=>copyText(it.en||it.zh||'');
+    head.appendChild(copyBtn);
+    if(it.en){const sv=document.createElement('button');sv.className='ghost mini';
+      sv.textContent='存入邮件记录';
+      sv.onclick=()=>saveEmail(it.kind==='email'?'邮件模板':'话术场景', it.title, it.en||it.zh||'');
+      head.appendChild(sv);}
+    d.appendChild(head);
+    if(it.en){const body=document.createElement('div');body.className='tpl-b';body.textContent=it.en;d.appendChild(body);}
+    if(it.zh){const z=document.createElement('div');z.className='tpl-zh';z.textContent=(it.kind==='email'?'说明：':'')+it.zh;d.appendChild(z);}
+    b.appendChild(d);
+  });
+}
+
 function copyText(t){if(!t)return;navigator.clipboard&&navigator.clipboard.writeText(t);toast('已复制');}
 
 // 启动: 恢复会话
