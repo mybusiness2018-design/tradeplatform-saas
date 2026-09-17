@@ -71,6 +71,21 @@
       <div class="row" style="flex:0"><span class="pill" id="who"></span><button class="ghost mini" onclick="logout()">退出</button></div>
     </div>
 
+    <!-- 付费激活锁屏: 未付款/未激活时显示, 隐藏功能模块 -->
+    <div id="paywall" class="card lock hide">
+      <div class="big">🔒</div>
+      <h1>账号待激活</h1>
+      <div class="sub">TradePilot 为付费订阅产品。完成付款后，卖家会为您激活账号，刷新即可使用全部功能。</div>
+      <div class="card" style="text-align:left;max-width:420px;margin:16px auto">
+        <h2>付款方式</h2>
+        <div class="sub" id="pay_info">（卖家在此填写：微信/支付宝/银行卡/PayPal 收款信息，或 Stripe 付款链接）</div>
+        <div class="btnrow"><button onclick="refreshActivation()">我已付款，刷新激活状态</button></div>
+        <div class="err" id="pay_err"></div>
+      </div>
+    </div>
+
+    <div id="modules">
+
     <!-- 客户模块(示例, 证明多租户隔离) -->
     <div class="card">
       <h2>我的客户（CRM 示例模块）</h2>
@@ -139,15 +154,53 @@
         <div><label>我的公司</label><input id="gc_s_company" placeholder="如 Demo Co"></div>
         <div><label>数量</label><input id="gc_s_qty" placeholder="如 1000"></div>
       </div>
-      <div class="btnrow"><button onclick="genSceneUI()">生成</button><button class="ghost" onclick="copyText($('gc_s_en').textContent)">复制英文</button></div>
+      <div class="btnrow"><button onclick="genSceneUI()">生成</button><button class="ghost" onclick="copyText($('gc_s_en').textContent)">复制英文</button><button class="ghost" onclick="saveEmail('话术/邮件', ($('gc_s_name').value.trim()||'客户')+' · '+($('gc_scene').value||''), $('gc_s_en').textContent)">保存到邮件记录</button></div>
       <div class="err" id="gc_s_err"></div>
       <div class="out" id="gc_s_en" style="margin-top:8px;white-space:pre-wrap;min-height:30px"></div>
       <div class="out zh" id="gc_s_zh" style="margin-top:6px;white-space:pre-wrap;min-height:24px"></div>
     </div>
 
+    <!-- 资料库 / 文档模块 (#94) -->
+    <div class="card">
+      <h2>资料库 / 文档</h2>
+      <div class="row">
+        <div><label>标题</label><input id="d_title" placeholder="如 斋月备货话术要点"></div>
+        <div><label>分类/标签</label><input id="d_tag" placeholder="如 话术 / 报价"></div>
+      </div>
+      <div class="row">
+        <div><label>内容 / 链接</label><textarea id="d_body" placeholder="要点、模板链接或备注"></textarea></div>
+      </div>
+      <div class="btnrow"><button onclick="addDoc()">添加资料</button><button class="ghost" onclick="clearDoc()">清空</button></div>
+      <div class="err" id="d_err"></div>
+      <table style="margin-top:12px">
+        <thead><tr><th>标题</th><th class="hidecol">标签</th><th>内容</th><th></th></tr></thead>
+        <tbody id="d_body_t"></tbody>
+      </table>
+    </div>
+
+    <!-- 邮件记录模块 (#94) -->
+    <div class="card">
+      <h2>邮件记录</h2>
+      <div class="sub">用上方 AI 工具生成话术后，点「保存到邮件记录」自动归档到这里；也可手动添加。</div>
+      <div class="row">
+        <div><label>主题</label><input id="e_subject" placeholder="如 Ahmed 跟进序列"></div>
+        <div><label>类型</label><select id="e_type"><option>跟进序列</option><option>话术/邮件</option><option>其他</option></select></div>
+      </div>
+      <div class="row"><div><label>内容</label><textarea id="e_body" placeholder="邮件/话术正文"></textarea></div></div>
+      <div class="btnrow"><button onclick="addEmail()">手动添加</button><button class="ghost" onclick="clearEmail()">清空</button></div>
+      <div class="err" id="e_err"></div>
+      <table style="margin-top:12px">
+        <thead><tr><th>日期</th><th>类型</th><th>主题</th><th class="hidecol">内容</th><th></th></tr></thead>
+        <tbody id="e_body_t"></tbody>
+      </table>
+    </div>
+
+    </div><!-- /modules -->
+
     <div class="card sub">
-      TradePilot 地基（账号门 + 每用户数据隔离）已跑通；邮件/话术核心算法已移到 Supabase 服务端（#93 完成，买家看不到源码）。
-      后续：① 把其余模块逐批移植；② 接入付款后激活开关。
+      TradePilot 地基（账号门 + 每用户数据隔离）已跑通；核心算法已移到 Supabase 服务端（#93 完成，买家看不到源码）。
+      模块：客户 CRM、AI 跟进序列、话术/邮件场景、资料库、邮件记录，均按用户隔离存于 Supabase（#94 完成）。
+      未付款账号显示激活锁屏，付款后由卖家激活（#95 完成）。
     </div>
   </div>
 </div>
@@ -208,14 +261,15 @@ async function onAuthed(){
   session.user=me.data;
   $('auth').classList.add('hide');$('app').classList.remove('hide');
   $('who').textContent=session.user.email;
-  await loadState();renderCust();
+  await loadState();renderCust();renderDocs();renderEmails();
+  await loadProfile();applyGate();
   loadScenes();
 }
 
 async function loadState(){
   const r=await api('/rest/v1/user_state?uid=eq.'+session.user.id+'&select=data');
   if(r.status===200&&Array.isArray(r.data)&&r.data[0]&&r.data[0].data){
-    try{state=Object.assign({customers:[]},r.data[0].data);}catch(e){}
+    try{state=Object.assign({customers:[],docs:[],emails:[]},r.data[0].data);}catch(e){}
   }
 }
 async function saveState(){
@@ -249,6 +303,76 @@ function renderCust(){
   if(!state.customers.length)b.innerHTML='<tr><td colspan="6" class="mtag">暂无客户，添加一条试试（数据只存在你自己的账号里）。</td></tr>';
 }
 function esc(s){return (s||'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
+
+// ===== #95 激活闸门: 读取 profiles.active, 未激活则锁屏 =====
+async function loadProfile(){
+  const r=await api('/rest/v1/profiles?select=active,plan&id=eq.'+session.user.id);
+  if(r.status===200&&Array.isArray(r.data)&&r.data[0]){
+    session.active=!!r.data[0].active;
+    session.plan=r.data[0].plan||'trial';
+  }else{
+    session.active=false; session.plan='trial'; // 兜底: 无 profile 行视为未激活
+  }
+}
+function applyGate(){
+  const active=session&&session.active;
+  if(active){ $('paywall').classList.add('hide'); $('modules').classList.remove('hide'); }
+  else { $('paywall').classList.remove('hide'); $('modules').classList.add('hide'); }
+}
+async function refreshActivation(){
+  try{
+    await loadProfile(); applyGate();
+    if(session.active) toast('已激活，欢迎使用');
+    else $('pay_err').textContent='尚未激活：请确认卖家已为您开通，或联系卖家提供账号。';
+  }catch(e){ $('pay_err').textContent=e.message; }
+}
+
+// ===== #94 资料库 / 文档模块 =====
+function addDoc(){
+  $('d_err').textContent='';
+  const title=$('d_title').value.trim();
+  if(!title){$('d_err').textContent='请填标题';return;}
+  state.docs.push({id:Date.now()+'',title,tag:$('d_tag').value.trim(),body:$('d_body').value.trim()});
+  clearDoc();renderDocs();saveState();
+}
+function clearDoc(){['d_title','d_tag','d_body'].forEach(k=>$(k).value='');}
+function delDoc(id){state.docs=state.docs.filter(x=>x.id!==id);renderDocs();saveState();}
+function renderDocs(){
+  const b=$('d_body_t');b.innerHTML='';
+  state.docs.forEach(x=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML='<td>'+esc(x.title)+'</td><td class="hidecol">'+esc(x.tag)+'</td><td>'+esc(x.body)+'</td><td><button class="danger mini" onclick="delDoc(\''+x.id+'\')">删除</button></td>';
+    b.appendChild(tr);
+  });
+  if(!state.docs.length)b.innerHTML='<tr><td colspan="4" class="mtag">暂无资料，添加一条（数据只存在你自己的账号里）。</td></tr>';
+}
+
+// ===== #94 邮件记录模块 =====
+function saveEmail(type,subject,body){
+  if(!body||!body.trim()){toast('先生成内容再保存');return;}
+  state.emails.unshift({id:Date.now()+'',date:new Date().toISOString().slice(0,10),type,subject,body});
+  renderEmails();saveState();toast('已存入邮件记录');
+}
+function addEmail(){
+  $('e_err').textContent='';
+  const subject=$('e_subject').value.trim();
+  const body=$('e_body').value.trim();
+  if(!body){$('e_err').textContent='请填内容';return;}
+  state.emails.unshift({id:Date.now()+'',date:new Date().toISOString().slice(0,10),type:$('e_type').value,subject,body});
+  clearEmail();renderEmails();saveState();
+}
+function clearEmail(){['e_subject','e_body'].forEach(k=>$(k).value='');$('e_type').value='跟进序列';}
+function delEmail(id){state.emails=state.emails.filter(x=>x.id!==id);renderEmails();saveState();}
+function renderEmails(){
+  const b=$('e_body_t');b.innerHTML='';
+  state.emails.forEach(x=>{
+    const tr=document.createElement('tr');
+    const preview=(x.body||'').replace(/\s+/g,' ').slice(0,60);
+    tr.innerHTML='<td>'+esc(x.date)+'</td><td>'+esc(x.type)+'</td><td>'+esc(x.subject)+'</td><td class="hidecol">'+esc(preview)+'</td><td><button class="danger mini" onclick="delEmail(\''+x.id+'\')">删除</button></td>';
+    b.appendChild(tr);
+  });
+  if(!state.emails.length)b.innerHTML='<tr><td colspan="5" class="mtag">暂无记录，生成话术后点「保存到邮件记录」即可归档。</td></tr>';
+}
 
 // ===== 服务端算法调用（核心逻辑不在前端, 只发请求收结果）=====
 async function edgeInvoke(action, payload){
